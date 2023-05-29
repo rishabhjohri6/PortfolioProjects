@@ -1,0 +1,130 @@
+SELECT *
+FROM CovidData.CovidDeaths
+order by 3,4
+
+-- Select the Data that we are going to be using
+
+SELECT location, date, total_cases,total_deaths, population
+FROM CovidData.CovidDeaths
+ORDER BY 1,2
+
+-- Looking at Total Cases and Total Deaths
+-- shows the likelihood of dying if you contract COVID in your country
+SELECT location, date, total_cases,total_deaths, (total_deaths/total_cases)*100 AS DeathPercentage
+FROM CovidData.CovidDeaths
+WHERE location = 'India'
+ORDER BY 1,2
+
+-- Looking at the Total Cases vs Population
+-- Shows what percentage of population got covid
+SELECT location, date, Population, total_cases, (total_cases/population)*100 AS PercentPopulationInfected
+FROM CovidData.CovidDeaths
+WHERE location = 'India'
+ORDER BY 1,2
+
+--Looking at countries with highest infection rate compared to population
+SELECT location, Population, MAX(total_cases) AS HighestInfectionCount, MAX((total_cases/population))*100 AS PercentPopulationInfected
+FROM CovidData.CovidDeaths
+GROUP BY location, population
+ORDER BY PercentPopulationInfected DESC
+
+-- Showing countries with the highest death count
+SELECT location, MAX(total_deaths) AS TotalDeathCount
+FROM CovidData.CovidDeaths
+WHERE continent is not null
+GROUP BY location
+ORDER BY TotalDeathCount DESC
+
+--LET'S BREAK THINGS DOWN BY CONTINENT
+--Showing the Continents with the highest count
+SELECT continent, MAX(total_deaths) AS TotalDeathCount
+FROM CovidData.CovidDeaths
+WHERE continent is not null
+GROUP BY continent
+ORDER BY TotalDeathCount DESC
+
+--GLOBAL NUMBERS
+SELECT date, SUM(new_cases) AS total_cases, SUM(new_deaths) AS total_deaths, SUM(new_deaths/new_cases)*100 AS DeathPercentage
+FROM CovidData.CovidDeaths
+WHERE continent is not null
+GROUP BY date
+ORDER BY 1,2
+
+--corrected query to remove 'Divided by 0 error'
+SELECT
+    date,
+    SUM(new_cases) AS total_cases,
+    SUM(new_deaths) AS total_deaths,
+    (SUM(new_deaths) * 100.0) / NULLIF(SUM(new_cases), 0) AS DeathPercentage
+FROM
+    CovidData.CovidDeaths
+WHERE
+    continent IS NOT NULL
+GROUP BY
+    date
+ORDER BY
+    1, 2
+
+
+--same query without date
+
+SELECT
+    --date,
+    SUM(new_cases) AS total_cases,
+    SUM(new_deaths) AS total_deaths,
+    (SUM(new_deaths) * 100.0) / NULLIF(SUM(new_cases), 0) AS DeathPercentage
+FROM
+    CovidData.CovidDeaths
+WHERE
+    continent IS NOT NULL
+--GROUP BY
+   -- date
+ORDER BY
+    1, 2
+
+--accessing covid vaccination data
+SELECT *
+FROM CovidData.CovidVaccinations
+
+--Joining the 2 tables
+SELECT *
+FROM CovidData.CovidDeaths AS dea
+JOIN CovidData.CovidVaccinations AS vac
+  ON dea.location = vac.location
+  and dea.date = vac.date
+
+
+--Looking at Total Population vs Vaccinations
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+FROM CovidData.CovidDeaths AS dea
+JOIN CovidData.CovidVaccinations AS vac
+  ON dea.location = vac.location
+  and dea.date = vac.date
+WHERE dea.continent is not null
+ORDER BY 2,3
+
+--Looking at Total Population vs vaccinations (Rolling Calculations)
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location, dea.date) AS RollingPeopleVaccinated
+FROM CovidData.CovidDeaths AS dea
+JOIN CovidData.CovidVaccinations AS vac
+  ON dea.location = vac.location
+  and dea.date = vac.date
+WHERE dea.continent is not null
+ORDER BY 2,3
+
+
+--Creating a CTE
+WITH PopvsVac
+AS
+( 
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location, dea.date) AS RollingPeopleVaccinated
+FROM CovidData.CovidDeaths AS dea
+JOIN CovidData.CovidVaccinations AS vac
+  ON dea.location = vac.location
+  and dea.date = vac.date
+WHERE dea.continent is not null
+)
+SELECT *, (RollingPeopleVaccinated/Population)*100
+FROM PopvsVac
